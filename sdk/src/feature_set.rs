@@ -650,6 +650,10 @@ pub mod stop_truncating_strings_in_syscalls {
     solana_sdk::declare_id!("16FMCmgLzCNNz6eTwGanbyN2ZxvTBSLuQ6DZhgeMshg");
 }
 
+pub mod vote_state_add_vote_latency {
+    solana_sdk::declare_id!("AWDJhNJaDy5AqHzGyuR7xfXjRoYZXbfqe3QStyJFEcgP");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -807,6 +811,7 @@ lazy_static! {
         (native_programs_consume_cu::id(), "Native program should consume compute units #30620"),
         (simplify_writable_program_account_check::id(), "Simplify checks performed for writable upgradeable program accounts #30559"),
         (stop_truncating_strings_in_syscalls::id(), "Stop truncating strings in syscalls #31029"),
+        (vote_state_add_vote_latency::id(), "replace Lockout with LandedVote (including vote latency) in vote state"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
