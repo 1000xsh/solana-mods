@@ -1770,6 +1770,70 @@ mod tests {
         );
     }
 
+    fn process_new_vote_state_replaced_root_vote_credits(
+        feature_set: &FeatureSet,
+        expected_credits: u64,
+    ) {
+        let mut vote_state1 = VoteState::default();
+        for i in 0..MAX_LOCKOUT_HISTORY + 2 {
+            process_slot_vote_unchecked(&mut vote_state1, i as u64);
+        }
+        assert_eq!(vote_state1.root_slot.unwrap(), 1);
+
+        // Vote credits should be 2, since two voted-on slots were "popped off the back" of the tower
+        assert_eq!(vote_state1.credits(), 2);
+
+        // Create a new vote state that represents the validator having not voted for a long time, then voting
+        // with an entirely new root that was never previously voted on.  This is valid because a vote state
+        // can include a root that it never voted on (if it votes much later off of a branch that it had never
+        // voted for before, well after its previous lockouts had all expired, such as after a very long delinquency).
+        let mut vote_state2 = VoteState::default();
+        for i in 0..MAX_LOCKOUT_HISTORY + 2 {
+            process_slot_vote_unchecked(&mut vote_state2, (i + 10000) as u64);
+        }
+        assert_eq!(vote_state2.root_slot.unwrap(), 10001);
+
+        assert_eq!(
+            process_new_vote_state_from_votes(
+                &mut vote_state1,
+                vote_state2.votes.clone(),
+                vote_state2.root_slot,
+                None,
+                vote_state2.current_epoch(),
+                Some(&feature_set)
+            ),
+            Ok(())
+        );
+
+        // The vote is valid, but no vote credits should be awarded because although there is a new root, it does not
+        // represent a slot previously voted on.
+        assert_eq!(vote_state1.credits(), expected_credits)
+    }
+
+    #[test]
+    fn test_process_new_vote_state_replaced_root_vote_credits() {
+        let mut feature_set = FeatureSet::default();
+
+        // First test using default feature set - the expected credits here of 3 is *incorrect* but is what is
+        // expected using the default feature set since before the vote_state_update_credit_per_dequeue feature,
+        // one credit was awarded per successful VoteStateUpdate tx (instead of being based off of votes popped
+        // off of the tower).  With this feature, the credits earned will be calculated as:
+        // 2 (from initial vote state)
+        // + 1 (just because there is a new root, even though it was never voted on -- this is the flaw)
+        process_new_vote_state_replaced_root_vote_credits(&feature_set, 3);
+
+        // Now test using vote_state_update_credit_per_dequeue feature.  The expected credits here of 34 is
+        // *incorrect* but is what is expected using vote_state_update_credit_per_dequeue.  With this feature, the
+        // credits earned will be calculated as:
+        // 2 (from initial vote state)
+        // + 31 (for votes which were "popped off of the back of the tower" by the new vote
+        // + 1 (just because there is a new root, even though it was never voted on -- this is the flaw)
+        feature_set.activate(&feature_set::vote_state_update_credit_per_dequeue::id(), 1);
+        process_new_vote_state_replaced_root_vote_credits(&feature_set, 34);
+
+        // XXX todo: implement a fix, and ensure that with this fix, only 33 credits are awarded
+    }
+
     #[test]
     fn test_process_new_vote_state_zero_confirmations() {
         let mut vote_state1 = VoteState::default();
