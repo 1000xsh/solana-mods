@@ -5532,6 +5532,9 @@ impl Bank {
                         debug!("tx error: {:?} {:?}", err, tx);
                     }
                     *err_count += 1;
+                    if err == TransactionError::InsufficientFundsForFee {
+                        info!("txingest badfee {}", tx.signature());
+                    }
                 }
             }
         }
@@ -5688,6 +5691,9 @@ impl Bank {
                 }
 
                 fees += fee;
+
+                info!("txingest fee {} {fee}", tx.signature());
+
                 Ok(())
             })
             .collect();
