@@ -161,6 +161,19 @@ impl Forwarder {
         self.update_data_budget();
         let packet_vec: Vec<_> = forwardable_packets
             .filter(|p| !p.meta().forwarded())
+            .filter(|p| {
+                if p.meta().is_from_staked_node() {
+                    if let Some(signature) = p
+                        .data(0..std::mem::size_of::<solana_sdk::signature::Signature>())
+                        .and_then(|data| solana_sdk::signature::Signature::try_from(data).ok())
+                    {
+                        info!("txingest fwd {}", signature);
+                    }
+                    true
+                } else {
+                    false
+                }
+            })
             .filter(|p| self.data_budget.take(p.meta().size))
             .filter_map(|p| p.data(..).map(|data| data.to_vec()))
             .collect();

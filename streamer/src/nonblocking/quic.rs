@@ -384,6 +384,7 @@ fn handle_and_cache_new_connection(
             Err(ConnectionHandlerError::ConnectionAddError)
         }
     } else {
+        info!("txingest exceeded {:?}", connection.remote_address());
         connection.close(
             CONNECTION_CLOSE_CODE_EXCEED_MAX_STREAM_COUNT.into(),
             CONNECTION_CLOSE_REASON_EXCEED_MAX_STREAM_COUNT,
@@ -416,6 +417,7 @@ async fn prune_unstaked_connections_and_add_new_connection(
             wait_for_chunk_timeout,
         )
     } else {
+        info!("txingest disallowed {:?}", connection.remote_address());
         connection.close(
             CONNECTION_CLOSE_CODE_DISALLOWED.into(),
             CONNECTION_CLOSE_REASON_DISALLOWED,
@@ -509,6 +511,7 @@ async fn setup_connection(
                 );
 
                 if params.stake > 0 {
+                    info!("txingest stake {:?} {}", from, params.stake);
                     let mut connection_table_l = staked_connection_table.lock().await;
 
                     if connection_table_l.total_size >= max_staked_connections {
@@ -563,6 +566,7 @@ async fn setup_connection(
                 )
                 .await
                 {
+                    info!("txingest stake {:?} 0", from);
                     stats
                         .connection_added_from_unstaked_peer
                         .fetch_add(1, Ordering::Relaxed);
@@ -987,6 +991,7 @@ impl ConnectionEntry {
 impl Drop for ConnectionEntry {
     fn drop(&mut self) {
         if let Some(conn) = self.connection.take() {
+            info!("txingest dropped {:?}", conn.remote_address());
             conn.close(
                 CONNECTION_CLOSE_CODE_DROPPED_ENTRY.into(),
                 CONNECTION_CLOSE_REASON_DROPPED_ENTRY,
@@ -1107,6 +1112,7 @@ impl ConnectionTable {
             Some((last_update, exit))
         } else {
             if let Some(connection) = connection {
+                info!("txingest toomany {:?}", connection.remote_address());
                 connection.close(
                     CONNECTION_CLOSE_CODE_TOO_MANY.into(),
                     CONNECTION_CLOSE_REASON_TOO_MANY,
