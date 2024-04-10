@@ -151,22 +151,24 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) -> bool {
         sig_start = sig_end;
     }
 
-    let tx_sig_end = tx_sig_start.checked_add(size_of::<Signature>()).unwrap();
+    if !packet.meta().addr.is_unspecified() {
+        let tx_sig_end = tx_sig_start.checked_add(size_of::<Signature>()).unwrap();
 
-    if (packet.meta().flags & PacketFlags::SIMPLE_VOTE_TX) == PacketFlags::SIMPLE_VOTE_TX {
-        info!(
-            "txingest sv {} {}:{}",
-            Signature::try_from(packet.data(tx_sig_start..tx_sig_end).unwrap()).unwrap(),
-            packet.meta().addr,
-            packet.meta().port
-        );
-    } else {
-        info!(
-            "txingest sig {} {}:{}",
-            Signature::try_from(packet.data(tx_sig_start..tx_sig_end).unwrap()).unwrap(),
-            packet.meta().addr,
-            packet.meta().port
-        );
+        if (packet.meta().flags & PacketFlags::SIMPLE_VOTE_TX) == PacketFlags::SIMPLE_VOTE_TX {
+            info!(
+                "txingest sv {} {}:{}",
+                Signature::try_from(packet.data(tx_sig_start..tx_sig_end).unwrap()).unwrap(),
+                packet.meta().addr,
+                packet.meta().port
+            );
+        } else {
+            info!(
+                "txingest sig {} {}:{}",
+                Signature::try_from(packet.data(tx_sig_start..tx_sig_end).unwrap()).unwrap(),
+                packet.meta().addr,
+                packet.meta().port
+            );
+        }
     }
 
     true
