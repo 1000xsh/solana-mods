@@ -27,6 +27,7 @@ use {
         },
         signature::Keypair,
         timing,
+        txingest::{txingest_send, txingest_timestamp, TxIngestMsg},
     },
     std::{
         iter::repeat_with,
@@ -387,7 +388,10 @@ fn handle_and_cache_new_connection(
             Err(ConnectionHandlerError::ConnectionAddError)
         }
     } else {
-        info!("txingest exceeded {:?}", connection.remote_address());
+        txingest_send(TxIngestMsg::Exceeded {
+            timestamp: txingest_timestamp(),
+            peer_addr: connection.remote_address(),
+        });
         connection.close(
             CONNECTION_CLOSE_CODE_EXCEED_MAX_STREAM_COUNT.into(),
             CONNECTION_CLOSE_REASON_EXCEED_MAX_STREAM_COUNT,
@@ -421,7 +425,10 @@ async fn prune_unstaked_connections_and_add_new_connection(
             max_connections,
         )
     } else {
-        info!("txingest disallowed {:?}", connection.remote_address());
+        txingest_send(TxIngestMsg::Disallowed {
+            timestamp: txingest_timestamp(),
+            peer_addr: connection.remote_address(),
+        });
         connection.close(
             CONNECTION_CLOSE_CODE_DISALLOWED.into(),
             CONNECTION_CLOSE_REASON_DISALLOWED,
@@ -525,7 +532,11 @@ async fn setup_connection(
                 );
 
                 if params.stake > 0 {
-                    info!("txingest stake {:?} {}", from, params.stake);
+                    txingest_send(TxIngestMsg::Stake {
+                        timestamp: txingest_timestamp(),
+                        peer_addr: from,
+                        stake: params.stake,
+                    });
                     let mut connection_table_l = staked_connection_table.lock().await;
 
                     if connection_table_l.total_size >= max_staked_connections {
@@ -581,7 +592,11 @@ async fn setup_connection(
                 )
                 .await
                 {
-                    info!("txingest stake {:?} 0", from);
+                    txingest_send(TxIngestMsg::Stake {
+                        timestamp: txingest_timestamp(),
+                        peer_addr: from,
+                        stake: 0,
+                    });
                     stats
                         .connection_added_from_unstaked_peer
                         .fetch_add(1, Ordering::Relaxed);
@@ -1050,7 +1065,10 @@ impl ConnectionEntry {
 impl Drop for ConnectionEntry {
     fn drop(&mut self) {
         if let Some(conn) = self.connection.take() {
-            info!("txingest dropped {:?}", conn.remote_address());
+            txingest_send(TxIngestMsg::Dropped {
+                timestamp: txingest_timestamp(),
+                peer_addr: conn.remote_address(),
+            });
             conn.close(
                 CONNECTION_CLOSE_CODE_DROPPED_ENTRY.into(),
                 CONNECTION_CLOSE_REASON_DROPPED_ENTRY,
@@ -1108,6 +1126,14 @@ impl ConnectionTable {
                 None => break,
                 Some((index, connections)) => {
                     num_pruned += connections.len();
+                    connections.iter().for_each(|connection_entry| {
+                        if let Some(connection) = &connection_entry.connection {
+                            txingest_send(TxIngestMsg::Pruned {
+                                timestamp: txingest_timestamp(),
+                                peer_addr: connection.remote_address(),
+                            });
+                        }
+                    });
                     self.table.swap_remove_index(index);
                 }
             }
@@ -1136,7 +1162,17 @@ impl ConnectionTable {
             .min_by_key(|&(_, stake)| stake)
             .filter(|&(_, stake)| stake < Some(threshold_stake))
             .and_then(|(index, _)| self.table.swap_remove_index(index))
-            .map(|(_, connections)| connections.len())
+            .map(|(_, connections)| {
+                connections.iter().for_each(|connection_entry| {
+                    if let Some(connection) = &connection_entry.connection {
+                        txingest_send(TxIngestMsg::Pruned {
+                            timestamp: txingest_timestamp(),
+                            peer_addr: connection.remote_address(),
+                        });
+                    }
+                });
+                connections.len()
+            })
             .unwrap_or_default();
         self.total_size = self.total_size.saturating_sub(num_pruned);
         num_pruned
@@ -1171,7 +1207,10 @@ impl ConnectionTable {
             Some((last_update, exit))
         } else {
             if let Some(connection) = connection {
-                info!("txingest toomany {:?}", connection.remote_address());
+                txingest_send(TxIngestMsg::TooMany {
+                    timestamp: txingest_timestamp(),
+                    peer_addr: connection.remote_address(),
+                });
                 connection.close(
                     CONNECTION_CLOSE_CODE_TOO_MANY.into(),
                     CONNECTION_CLOSE_REASON_TOO_MANY,

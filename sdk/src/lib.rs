@@ -101,6 +101,7 @@ pub mod timing;
 pub mod transaction;
 pub mod transaction_context;
 pub mod transport;
+pub mod txingest;
 pub mod wasm;
 
 /// Same as `declare_id` except report that this id has been deprecated.

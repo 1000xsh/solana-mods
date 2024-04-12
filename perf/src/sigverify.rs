@@ -19,6 +19,7 @@ use {
         pubkey::Pubkey,
         short_vec::decode_shortu16_len,
         signature::Signature,
+        txingest::{txingest_send, txingest_timestamp, TxIngestMsg},
     },
     std::{convert::TryFrom, mem::size_of},
 };
@@ -155,19 +156,19 @@ pub fn verify_packet(packet: &mut Packet, reject_non_vote: bool) -> bool {
         let tx_sig_end = tx_sig_start.checked_add(size_of::<Signature>()).unwrap();
 
         if (packet.meta().flags & PacketFlags::SIMPLE_VOTE_TX) == PacketFlags::SIMPLE_VOTE_TX {
-            info!(
-                "txingest sv {} {}:{}",
-                Signature::try_from(packet.data(tx_sig_start..tx_sig_end).unwrap()).unwrap(),
-                packet.meta().addr,
-                packet.meta().port
-            );
+            txingest_send(TxIngestMsg::VoteTx {
+                timestamp: txingest_timestamp(),
+                peer_addr: packet.meta().addr,
+                peer_port: packet.meta().port,
+            });
         } else {
-            info!(
-                "txingest sig {} {}:{}",
-                Signature::try_from(packet.data(tx_sig_start..tx_sig_end).unwrap()).unwrap(),
-                packet.meta().addr,
-                packet.meta().port
-            );
+            txingest_send(TxIngestMsg::UserTx {
+                timestamp: txingest_timestamp(),
+                peer_addr: packet.meta().addr,
+                peer_port: packet.meta().port,
+                signature: Signature::try_from(packet.data(tx_sig_start..tx_sig_end).unwrap())
+                    .unwrap(),
+            });
         }
     }
 

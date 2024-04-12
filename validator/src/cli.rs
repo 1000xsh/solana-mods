@@ -1215,6 +1215,13 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Specify the configuration file for a Runtime plugin."),
         )
         .arg(
+            Arg::with_name("txingest_host")
+                .long("txingest-host")
+                .value_name("TXINGEST_HOST")
+                .takes_value(true)
+                .help("Specify the host:port to connect and send txingest messages to."),
+        )
+        .arg(
             Arg::with_name("snapshot_archive_format")
                 .long("snapshot-archive-format")
                 .alias("snapshot-compression") // Legacy name used by Solana v1.5.x and older

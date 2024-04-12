@@ -69,6 +69,7 @@ use {
         hash::Hash,
         pubkey::Pubkey,
         signature::{read_keypair, Keypair, Signer},
+        txingest::txingest_connect,
     },
     solana_send_transaction_service::send_transaction_service,
     solana_streamer::socket::SocketAddrSpace,
@@ -1370,6 +1371,10 @@ pub fn main() {
         None
     };
     let starting_with_geyser_plugins: bool = on_start_geyser_plugin_config_files.is_some();
+
+    if matches.is_present("txingest_host") {
+        txingest_connect(value_t_or_exit!(matches, "txingest_host", String).as_str());
+    };
 
     let rpc_bigtable_config = if matches.is_present("enable_rpc_bigtable_ledger_storage")
         || matches.is_present("enable_bigtable_ledger_upload")
