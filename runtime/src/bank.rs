@@ -173,6 +173,7 @@ use {
         transaction_context::{
             ExecutionRecord, TransactionAccount, TransactionContext, TransactionReturnData,
         },
+        txingest::{txingest_send, txingest_timestamp, TxIngestMsg},
     },
     solana_stake_program::stake_state::{
         self, InflationPointCalculationEvent, PointValue, StakeStateV2,
@@ -5445,7 +5446,10 @@ impl Bank {
                     }
                     *err_count += 1;
                     if err == TransactionError::InsufficientFundsForFee {
-                        info!("txingest badfee {}", tx.signature());
+                        txingest_send(TxIngestMsg::BadFee {
+                            timestamp: txingest_timestamp(),
+                            signature: tx.signature().clone(),
+                        })
                     }
                 }
             }
@@ -5604,7 +5608,11 @@ impl Bank {
 
                 fees += fee;
 
-                info!("txingest fee {} {fee}", tx.signature());
+                txingest_send(TxIngestMsg::Fee {
+                    timestamp: txingest_timestamp(),
+                    signature: tx.signature().clone(),
+                    fee,
+                });
 
                 Ok(())
             })

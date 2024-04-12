@@ -15,7 +15,11 @@ use {
     solana_perf::{data_budget::DataBudget, packet::Packet},
     solana_poh::poh_recorder::PohRecorder,
     solana_runtime::bank_forks::BankForks,
-    solana_sdk::{pubkey::Pubkey, transport::TransportError},
+    solana_sdk::{
+        pubkey::Pubkey,
+        transport::TransportError,
+        txingest::{txingest_send, txingest_timestamp, TxIngestMsg},
+    },
     solana_streamer::sendmmsg::batch_send,
     std::{
         iter::repeat,
@@ -167,7 +171,10 @@ impl Forwarder {
                         .data(0..std::mem::size_of::<solana_sdk::signature::Signature>())
                         .and_then(|data| solana_sdk::signature::Signature::try_from(data).ok())
                     {
-                        info!("txingest fwd {}", signature);
+                        txingest_send(TxIngestMsg::Forwarded {
+                            timestamp: txingest_timestamp(),
+                            signature,
+                        });
                     }
                     true
                 } else {
