@@ -35,13 +35,15 @@ pub enum TxIngestMsg {
         peer_addr: SocketAddr,
         stake: u64,
     },
-    // A previously established QUIC connection has been pruned, to make room for a new connection
-    Pruned {
+    // A previously established QUIC connection has been closed by the local peer, typically because it has been
+    // pruned
+    Dropped {
         timestamp: u64,
         peer_addr: SocketAddr,
     },
-    // A previously established QUIC connection has been dropped
-    Dropped {
+    // A previously established QUIC connection has been closed by some action or inaction of the peer: either
+    // an error by the remote peer, or an explicit close, or a timeout beacuse the remote peer didn't send packets.
+    Closed {
         timestamp: u64,
         peer_addr: SocketAddr,
     },
