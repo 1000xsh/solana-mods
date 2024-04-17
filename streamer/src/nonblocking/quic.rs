@@ -388,10 +388,6 @@ fn handle_and_cache_new_connection(
             Err(ConnectionHandlerError::ConnectionAddError)
         }
     } else {
-        txingest_send(TxIngestMsg::Exceeded {
-            timestamp: txingest_timestamp(),
-            peer_addr: connection.remote_address(),
-        });
         connection.close(
             CONNECTION_CLOSE_CODE_EXCEED_MAX_STREAM_COUNT.into(),
             CONNECTION_CLOSE_REASON_EXCEED_MAX_STREAM_COUNT,
@@ -425,10 +421,6 @@ async fn prune_unstaked_connections_and_add_new_connection(
             max_connections,
         )
     } else {
-        txingest_send(TxIngestMsg::Disallowed {
-            timestamp: txingest_timestamp(),
-            peer_addr: connection.remote_address(),
-        });
         connection.close(
             CONNECTION_CLOSE_CODE_DISALLOWED.into(),
             CONNECTION_CLOSE_REASON_DISALLOWED,
@@ -532,11 +524,6 @@ async fn setup_connection(
                 );
 
                 if params.stake > 0 {
-                    txingest_send(TxIngestMsg::Stake {
-                        timestamp: txingest_timestamp(),
-                        peer_addr: from,
-                        stake: params.stake,
-                    });
                     let mut connection_table_l = staked_connection_table.lock().await;
 
                     if connection_table_l.total_size >= max_staked_connections {
@@ -557,6 +544,11 @@ async fn setup_connection(
                             stats
                                 .connection_added_from_staked_peer
                                 .fetch_add(1, Ordering::Relaxed);
+                            txingest_send(TxIngestMsg::Stake {
+                                timestamp: txingest_timestamp(),
+                                peer_addr: from,
+                                stake: params.stake,
+                            });
                         }
                     } else {
                         // If we couldn't prune a connection in the staked connection table, let's
@@ -574,6 +566,11 @@ async fn setup_connection(
                             stats
                                 .connection_added_from_staked_peer
                                 .fetch_add(1, Ordering::Relaxed);
+                            txingest_send(TxIngestMsg::Stake {
+                                timestamp: txingest_timestamp(),
+                                peer_addr: from,
+                                stake: params.stake,
+                            });
                         } else {
                             stats
                                 .connection_add_failed_on_pruning
@@ -581,6 +578,11 @@ async fn setup_connection(
                             stats
                                 .connection_add_failed_staked_node
                                 .fetch_add(1, Ordering::Relaxed);
+                            txingest_send(TxIngestMsg::Exceeded {
+                                timestamp: txingest_timestamp(),
+                                peer_addr: from,
+                                stake: params.stake,
+                            });
                         }
                     }
                 } else if let Ok(()) = prune_unstaked_connections_and_add_new_connection(
@@ -592,22 +594,31 @@ async fn setup_connection(
                 )
                 .await
                 {
+                    stats
+                        .connection_added_from_unstaked_peer
+                        .fetch_add(1, Ordering::Relaxed);
                     txingest_send(TxIngestMsg::Stake {
                         timestamp: txingest_timestamp(),
                         peer_addr: from,
                         stake: 0,
                     });
-                    stats
-                        .connection_added_from_unstaked_peer
-                        .fetch_add(1, Ordering::Relaxed);
                 } else {
                     stats
                         .connection_add_failed_unstaked_node
                         .fetch_add(1, Ordering::Relaxed);
+                    txingest_send(TxIngestMsg::Exceeded {
+                        timestamp: txingest_timestamp(),
+                        peer_addr: from,
+                        stake: 0,
+                    });
                 }
             }
             Err(e) => {
                 handle_connection_error(e, &stats, from);
+                txingest_send(TxIngestMsg::Failed {
+                    timestamp: txingest_timestamp(),
+                    peer_addr: from,
+                });
             }
         }
     } else {
@@ -625,55 +636,31 @@ fn handle_connection_error(e: quinn::ConnectionError, stats: &StreamStats, from:
             stats
                 .connection_setup_error_timed_out
                 .fetch_add(1, Ordering::Relaxed);
-            txingest_send(TxIngestMsg::Closed {
-                timestamp: txingest_timestamp(),
-                peer_addr: from,
-            });
         }
         quinn::ConnectionError::ConnectionClosed(_) => {
             stats
                 .connection_setup_error_closed
                 .fetch_add(1, Ordering::Relaxed);
-            txingest_send(TxIngestMsg::Closed {
-                timestamp: txingest_timestamp(),
-                peer_addr: from,
-            });
         }
         quinn::ConnectionError::TransportError(_) => {
             stats
                 .connection_setup_error_transport
                 .fetch_add(1, Ordering::Relaxed);
-            txingest_send(TxIngestMsg::Closed {
-                timestamp: txingest_timestamp(),
-                peer_addr: from,
-            });
         }
         quinn::ConnectionError::ApplicationClosed(_) => {
             stats
                 .connection_setup_error_app_closed
                 .fetch_add(1, Ordering::Relaxed);
-            txingest_send(TxIngestMsg::Closed {
-                timestamp: txingest_timestamp(),
-                peer_addr: from,
-            });
         }
         quinn::ConnectionError::Reset => {
             stats
                 .connection_setup_error_reset
                 .fetch_add(1, Ordering::Relaxed);
-            txingest_send(TxIngestMsg::Closed {
-                timestamp: txingest_timestamp(),
-                peer_addr: from,
-            });
         }
         quinn::ConnectionError::LocallyClosed => {
             stats
                 .connection_setup_error_locally_closed
                 .fetch_add(1, Ordering::Relaxed);
-            txingest_send(TxIngestMsg::Dropped {
-                timestamp: txingest_timestamp(),
-                peer_addr: from,
-            });
         }
         _ => {}
     }
@@ -1093,6 +1080,10 @@ impl Drop for ConnectionEntry {
                 CONNECTION_CLOSE_CODE_DROPPED_ENTRY.into(),
                 CONNECTION_CLOSE_REASON_DROPPED_ENTRY,
             );
+            txingest_send(TxIngestMsg::Closed {
+                timestamp: txingest_timestamp(),
+                peer_addr: conn.remote_address(),
+            });
         }
         self.exit.store(true, Ordering::Relaxed);
     }
@@ -1146,6 +1137,14 @@ impl ConnectionTable {
                 None => break,
                 Some((index, connections)) => {
                     num_pruned += connections.len();
+                    connections.iter().for_each(|connection_entry| {
+                        if let Some(connection) = &connection_entry.connection {
+                            txingest_send(TxIngestMsg::Pruned {
+                                timestamp: txingest_timestamp(),
+                                peer_addr: connection.remote_address(),
+                            });
+                        }
+                    });
                     self.table.swap_remove_index(index);
                 }
             }
@@ -1174,7 +1173,17 @@ impl ConnectionTable {
             .min_by_key(|&(_, stake)| stake)
             .filter(|&(_, stake)| stake < Some(threshold_stake))
             .and_then(|(index, _)| self.table.swap_remove_index(index))
-            .map(|(_, connections)| connections.len())
+            .map(|(_, connections)| {
+                connections.iter().for_each(|connection_entry| {
+                    if let Some(connection) = &connection_entry.connection {
+                        txingest_send(TxIngestMsg::Pruned {
+                            timestamp: txingest_timestamp(),
+                            peer_addr: connection.remote_address(),
+                        });
+                    }
+                });
+                connections.len()
+            })
             .unwrap_or_default();
         self.total_size = self.total_size.saturating_sub(num_pruned);
         num_pruned
@@ -1209,10 +1218,6 @@ impl ConnectionTable {
             Some((last_update, exit))
         } else {
             if let Some(connection) = connection {
-                txingest_send(TxIngestMsg::TooMany {
-                    timestamp: txingest_timestamp(),
-                    peer_addr: connection.remote_address(),
-                });
                 connection.close(
                     CONNECTION_CLOSE_CODE_TOO_MANY.into(),
                     CONNECTION_CLOSE_REASON_TOO_MANY,

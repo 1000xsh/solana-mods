@@ -13,21 +13,17 @@ use {
 #[derive(Serialize, Deserialize)]
 // timestamp in all messages is number of milliseconds since Unix Epoch
 pub enum TxIngestMsg {
-    // Failed to accept a new QUIC connection from the remote peer because the number of QUIC connections has already
-    // been exceeded
+    // Failed to negotiate connection from a remote peer because protocol error
+    Failed {
+        timestamp: u64,
+        peer_addr: SocketAddr,
+    },
+    // Failed to accept a new QUIC connection from the remote peer because the peer would exceed the number of
+    // connections/streams it is allowed to make
     Exceeded {
         timestamp: u64,
         peer_addr: SocketAddr,
-    },
-    // Failed to accept a new QUIC connection from the remote peer because max_connections is 0
-    Disallowed {
-        timestamp: u64,
-        peer_addr: SocketAddr,
-    },
-    // Failed to accept a new QUIC connection from the remote peer because too many
-    TooMany {
-        timestamp: u64,
-        peer_addr: SocketAddr,
+        stake: u64,
     },
     // Issued when a QUIC connection has been fully established -- at this point the stake of the remote peer is known
     Stake {
@@ -35,14 +31,15 @@ pub enum TxIngestMsg {
         peer_addr: SocketAddr,
         stake: u64,
     },
-    // A previously established QUIC connection has been closed by the local peer, typically because it has been
-    // pruned
-    Dropped {
+    // A previously established QUIC connection has been pruned by the local peer to make room for other connections.
+    // Closed will follow.
+    Pruned {
         timestamp: u64,
         peer_addr: SocketAddr,
     },
-    // A previously established QUIC connection has been closed by some action or inaction of the peer: either
-    // an error by the remote peer, or an explicit close, or a timeout beacuse the remote peer didn't send packets.
+    // A previously established QUIC connection has been closed; if the connection was not pruned, then this would be
+    // due to some action or inaction of the peer: either an error by the remote peer, or an explicit close, or a
+    // timeout beacuse the remote peer didn't send packets.
     Closed {
         timestamp: u64,
         peer_addr: SocketAddr,
