@@ -111,6 +111,18 @@ pub fn txingest_connect(addr: &str) {
                     }
                 }
             };
+            // Clear the receiver, to eliminate old messages
+            {
+                let tx_ingest = TX_INGEST.get().expect("txingest channel failure (1)");
+                let len = tx_ingest.receiver.len();
+                for _ in 0..(len + 1) {
+                    tx_ingest
+                        .receiver
+                        .recv()
+                        .expect("txingest channel failure (2)");
+                }
+            }
+
             loop {
                 // Read message from TxIngest receiver and write it to tcp_stream; if error, break the loop which will
                 // create a new tcp_stream
