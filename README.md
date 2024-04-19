@@ -9,6 +9,21 @@
 [![Build status](https://badge.buildkite.com/8cc350de251d61483db98bdfc895b9ea0ac8ffa4a32ee850ed.svg?branch=master)](https://buildkite.com/solana-labs/solana/builds?branch=master)
 [![codecov](https://codecov.io/gh/solana-labs/solana/branch/master/graph/badge.svg)](https://codecov.io/gh/solana-labs/solana)
 
+# TxIngest
+
+This is a patched version of the Solana validator.  It adds functionality whereby the validator will connect out to a
+remote listener and deliver events to that listener describing the state of QUIC connections and various aspects of
+them, as well as other events that may be interesting when evaluating QUIC based tx ingestion.
+
+A new command-line option is added: --txingest-host HOST:PORT
+
+This option will cause the validator to connect out to that host and port, and deliver txingest events to it.  The
+validator will attempt to connect to this HOST:PORT once per second, and will attempt a re-connect if the connection
+is broken.  If the listener is not present, the cost to the validator is minimal; it will buffer a limited number of
+messages and then stop buffering while waiting for a new connection.
+
+The listener will receive events as defined in sdk/src/txingest.rs as bincode serialized structures.
+
 # Building
 
 ## **1. Install rustc, cargo and rustfmt.**
