@@ -73,6 +73,18 @@ pub enum TxIngestMsg {
         signature: Signature,
         fee: u64,
     },
+    // I will be leader in N slots -- logged for N of 20 ... 1
+    WillBeLeader {
+        timestamp: u64,
+        slots: u8,
+    },
+    // I am leader
+    BeginLeader {
+        timestamp: u64,
+    },
+    EndLeader {
+        timestamp: u64,
+    },
 }
 
 // Logs an error and does nothing for all calls beyond the first

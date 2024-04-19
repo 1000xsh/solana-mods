@@ -74,6 +74,7 @@ use {
         signature::{Keypair, Signature, Signer},
         timing::timestamp,
         transaction::Transaction,
+        txingest::{txingest_send, txingest_timestamp, TxIngestMsg},
     },
     solana_vote::vote_sender_types::ReplayVoteSender,
     solana_vote_program::vote_state::VoteTransaction,
@@ -1834,8 +1835,14 @@ impl ReplayStage {
         if let Some(ref current_leader) = current_leader {
             if current_leader != new_leader {
                 let msg = if current_leader == my_pubkey {
+                    txingest_send(TxIngestMsg::EndLeader {
+                        timestamp: txingest_timestamp(),
+                    });
                     ". I am no longer the leader"
                 } else if new_leader == my_pubkey {
+                    txingest_send(TxIngestMsg::BeginLeader {
+                        timestamp: txingest_timestamp(),
+                    });
                     ". I am now the leader"
                 } else {
                     ""
@@ -2604,6 +2611,15 @@ impl ReplayStage {
         poh_recorder.write().unwrap().reset(bank, next_leader_slot);
 
         let next_leader_msg = if let Some(next_leader_slot) = next_leader_slot {
+            if next_leader_slot.0 > slot {
+                let slots = next_leader_slot.0 - slot;
+                if (slots > 0) && (slots <= 20) {
+                    txingest_send(TxIngestMsg::WillBeLeader {
+                        timestamp: txingest_timestamp(),
+                        slots: slots as u8,
+                    });
+                }
+            }
             format!("My next leader slot is {}", next_leader_slot.0)
         } else {
             "I am not in the leader schedule yet".to_owned()
