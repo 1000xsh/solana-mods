@@ -25,7 +25,9 @@ pub enum TxIngestMsg {
         peer_addr: SocketAddr,
         stake: u64,
     },
-    // Issued when a QUIC connection has been fully established -- at this point the stake of the remote peer is known
+    // Issued when a QUIC connection has been fully established -- at this point the stake of the remote peer is known.
+    // NOTE: currently this appears to sometimes be issued multiple times per single QUIC connection.  Needs
+    // investigation.
     Stake {
         timestamp: u64,
         peer_addr: SocketAddr,
@@ -73,7 +75,7 @@ pub enum TxIngestMsg {
         signature: Signature,
         fee: u64,
     },
-    // I will be leader in N slots -- logged for N of 20 ... 1
+    // I will be leader in N slots -- logged for N of 200 ... 2
     WillBeLeader {
         timestamp: u64,
         slots: u8,
@@ -82,6 +84,7 @@ pub enum TxIngestMsg {
     BeginLeader {
         timestamp: u64,
     },
+    // I am no longer leader
     EndLeader {
         timestamp: u64,
     },
@@ -126,7 +129,7 @@ pub fn txingest_connect(addr: &str) {
             {
                 let tx_ingest = TX_INGEST.get().expect("txingest channel failure (1)");
                 let len = tx_ingest.receiver.len();
-                for _ in 0..(len + 1) {
+                for _ in 0..len {
                     tx_ingest
                         .receiver
                         .recv()
