@@ -2613,7 +2613,10 @@ impl ReplayStage {
         let next_leader_msg = if let Some(next_leader_slot) = next_leader_slot {
             if next_leader_slot.0 > slot {
                 let slots = next_leader_slot.0 - slot;
-                if (slots > 0) && (slots <= 20) {
+                // Only log if slots > 1 temporarily.  Apparently during leader slots, this function is called with a
+                // 1 slot old bank, which then makes this log that the next leader slot is 1 away during each of the
+                // actual leader slots.  So just don't log when slots == 1.
+                if (slots > 1) && (slots <= 200) {
                     txingest_send(TxIngestMsg::WillBeLeader {
                         timestamp: txingest_timestamp(),
                         slots: slots as u8,
