@@ -52,7 +52,6 @@ use {
         pubkey::Pubkey,
         rent::Rent,
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
-        txingest::txingest_connect,
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_tpu_client::tpu_client::{
@@ -970,8 +969,6 @@ impl TestValidator {
         if let Some(ref tower_storage) = config.tower_storage {
             validator_config.tower_storage = tower_storage.clone();
         }
-
-        txingest_connect("127.0.0.1:15151");
 
         let validator = Some(Validator::new(
             node,
