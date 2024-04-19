@@ -94,6 +94,8 @@ pub fn txingest_connect(addr: &str) {
         return;
     }
 
+    log::info!("txingest: connecting to {addr}");
+
     {
         let (sender, receiver) = bounded::<TxIngestMsg>(MAX_BUFFERED_TXINGEST_MESSAGES);
 
@@ -115,10 +117,7 @@ pub fn txingest_connect(addr: &str) {
             let mut tcp_stream = loop {
                 match TcpStream::connect(&addr) {
                     Ok(tcp_stream) => break tcp_stream,
-                    Err(e) => {
-                        log::warn!(
-                            "Failed to connect to txingest peer {addr} because {e}, trying again in 1 second"
-                        );
+                    Err(_) => {
                         std::thread::sleep(std::time::Duration::from_secs(1));
                     }
                 }
