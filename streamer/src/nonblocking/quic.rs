@@ -547,6 +547,7 @@ async fn setup_connection(
                             txingest_send(TxIngestMsg::Stake {
                                 timestamp: txingest_timestamp(),
                                 peer_addr: from,
+                                peer_pubkey: params.remote_pubkey,
                                 stake: params.stake,
                             });
                         }
@@ -569,6 +570,7 @@ async fn setup_connection(
                             txingest_send(TxIngestMsg::Stake {
                                 timestamp: txingest_timestamp(),
                                 peer_addr: from,
+                                peer_pubkey: params.remote_pubkey,
                                 stake: params.stake,
                             });
                         } else {
@@ -581,6 +583,7 @@ async fn setup_connection(
                             txingest_send(TxIngestMsg::Exceeded {
                                 timestamp: txingest_timestamp(),
                                 peer_addr: from,
+                                peer_pubkey: params.remote_pubkey,
                                 stake: params.stake,
                             });
                         }
@@ -600,6 +603,7 @@ async fn setup_connection(
                     txingest_send(TxIngestMsg::Stake {
                         timestamp: txingest_timestamp(),
                         peer_addr: from,
+                        peer_pubkey: params.remote_pubkey,
                         stake: 0,
                     });
                 } else {
@@ -609,6 +613,7 @@ async fn setup_connection(
                     txingest_send(TxIngestMsg::Exceeded {
                         timestamp: txingest_timestamp(),
                         peer_addr: from,
+                        peer_pubkey: params.remote_pubkey,
                         stake: 0,
                     });
                 }

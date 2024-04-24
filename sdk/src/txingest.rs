@@ -1,7 +1,7 @@
 use {
     bincode::Options,
     crossbeam_channel::{bounded, Receiver, Sender},
-    solana_sdk::signature::Signature,
+    solana_sdk::{pubkey::Pubkey, signature::Signature},
     std::{
         io::Write,
         net::{IpAddr, SocketAddr, TcpStream},
@@ -23,6 +23,7 @@ pub enum TxIngestMsg {
     Exceeded {
         timestamp: u64,
         peer_addr: SocketAddr,
+        peer_pubkey: Option<Pubkey>,
         stake: u64,
     },
     // Issued when a QUIC connection has been fully established -- at this point the stake of the remote peer is known.
@@ -31,6 +32,7 @@ pub enum TxIngestMsg {
     Stake {
         timestamp: u64,
         peer_addr: SocketAddr,
+        peer_pubkey: Option<Pubkey>,
         stake: u64,
     },
     // A previously established QUIC connection has been pruned by the local peer to make room for other connections.
