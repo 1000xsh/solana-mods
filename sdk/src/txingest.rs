@@ -75,6 +75,8 @@ pub enum TxIngestMsg {
     Fee {
         timestamp: u64,
         signature: Signature,
+        cu_limit: u64,
+        cu_used: u64,
         fee: u64,
     },
     // I will be leader in N slots -- logged for N of 200 ... 2

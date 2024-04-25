@@ -4074,7 +4074,10 @@ impl Bank {
                     NoncePartial::new(address, account).lamports_per_signature()
                 })
         })?;
-        Some(self.get_fee_for_message_with_lamports_per_signature(message, lamports_per_signature))
+        Some(
+            self.get_fee_for_message_with_lamports_per_signature(message, lamports_per_signature)
+                .0,
+        )
     }
 
     /// Returns true when startup accounts hash verification has completed or never had to run in background.
@@ -4108,22 +4111,27 @@ impl Bank {
             .verification_complete()
     }
 
+    // Returns (fee, cu_limit)
     pub fn get_fee_for_message_with_lamports_per_signature(
         &self,
         message: &SanitizedMessage,
         lamports_per_signature: u64,
-    ) -> u64 {
-        self.fee_structure.calculate_fee(
-            message,
-            lamports_per_signature,
-            &ComputeBudget::fee_budget_limits(
-                message.program_instructions_iter(),
-                &self.feature_set,
+    ) -> (u64, u64) {
+        let fee_budget_limits = ComputeBudget::fee_budget_limits(
+            message.program_instructions_iter(),
+            &self.feature_set,
+        );
+        (
+            self.fee_structure.calculate_fee(
+                message,
+                lamports_per_signature,
+                &fee_budget_limits,
+                self.feature_set
+                    .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
+                self.feature_set
+                    .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
             ),
-            self.feature_set
-                .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
-            self.feature_set
-                .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+            fee_budget_limits.compute_unit_limit,
         )
     }
 
@@ -5571,10 +5579,12 @@ impl Bank {
             .iter()
             .zip(execution_results)
             .map(|(tx, execution_result)| {
-                let (execution_status, durable_nonce_fee) = match &execution_result {
-                    TransactionExecutionResult::Executed { details, .. } => {
-                        Ok((&details.status, details.durable_nonce_fee.as_ref()))
-                    }
+                let (execution_status, durable_nonce_fee, cu_used) = match &execution_result {
+                    TransactionExecutionResult::Executed { details, .. } => Ok((
+                        &details.status,
+                        details.durable_nonce_fee.as_ref(),
+                        details.executed_units,
+                    )),
                     TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
                 }?;
 
@@ -5590,7 +5600,7 @@ impl Bank {
 
                 let lamports_per_signature =
                     lamports_per_signature.ok_or(TransactionError::BlockhashNotFound)?;
-                let fee = self.get_fee_for_message_with_lamports_per_signature(
+                let (fee, cu_limit) = self.get_fee_for_message_with_lamports_per_signature(
                     tx.message(),
                     lamports_per_signature,
                 );
@@ -5611,6 +5621,8 @@ impl Bank {
                 txingest_send(TxIngestMsg::Fee {
                     timestamp: txingest_timestamp(),
                     signature: tx.signature().clone(),
+                    cu_limit,
+                    cu_used,
                     fee,
                 });
 
