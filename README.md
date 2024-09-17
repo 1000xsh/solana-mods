@@ -1,145 +1,39 @@
-<p align="center">
-  <a href="https://solana.com">
-    <img alt="Solana" src="https://i.imgur.com/IKyzQ6T.png" width="250" />
-  </a>
-</p>
+### overview
 
-[![Solana crate](https://img.shields.io/crates/v/solana-core.svg)](https://crates.io/crates/solana-core)
-[![Solana documentation](https://docs.rs/solana-core/badge.svg)](https://docs.rs/solana-core)
-[![Build status](https://badge.buildkite.com/8cc350de251d61483db98bdfc895b9ea0ac8ffa4a32ee850ed.svg?branch=master)](https://buildkite.com/solana-labs/solana/builds?branch=master)
-[![codecov](https://codecov.io/gh/solana-labs/solana/branch/master/graph/badge.svg)](https://codecov.io/gh/solana-labs/solana)
+this repository contains modifications to the voting mechanism for validators on solana. these changes introduce additional criteria for voting, aimed at optimizing vote timing and reducing the risk of getting stuck on dying forks. the modifications also include mechanisms for backfilling votes and preventing unnecessary vote expirations, which can improve vote credits but also introduce some induced lag under specific conditions.
 
-# Building
+### config
+the configuration for these mods is stored in a file named mostly_confirmed_threshold, located in the validator's root directory. if the file doesn't exist, the mods do nothing. the file contains four values in sequence:
+- mostly confirmed threshold: the fraction of stake-weighted votes required for a slot to be considered "mostly confirmed." for example, 0.55 means a slot is considered confirmed after receiving 55% of votes. higher values induce more conservative voting behavior.
+- slots beyond confirmed slot: the number of slots beyond the most recent "mostly confirmed" slot that will be voted on regardless of stake weight. lower numbers result in more induced lag.
+- skip behavior: set to 0, 1, or 2. it controls voting after a skip in slots. 0 disables additional processing. 1 or 2 adds further restrictions based on the "mostly confirmed threshold" or full consensus, respectively.
+- escape hatch distance: number of slots without any votes before the mods temporarily disable themselves, acting as a safeguard against bugs or extreme cluster issues.
 
-## **1. Install rustc, cargo and rustfmt.**
+#### example config
+  ```0.45 4 0 24```
 
-```bash
-$ curl https://sh.rustup.rs -sSf | sh
-$ source $HOME/.cargo/env
-$ rustup component add rustfmt
-```
+  this config adds minimal lag, as the threshold is set relatively low and allows voting on four slots beyond the most recently confirmed slot.
 
-When building the master branch, please make sure you are using the latest stable rust version by running:
+### additional features
+- backfill votes: votes are cast for any votable slots (e.g., B, C, D) if they follow a previously voted-on slot (e.g., A) but were not voted on at the time.
+- vote expiration prevention: votes are no longer expired unnecessarily, leaving more votes in the tower and potentially earning more credits.
+- vote pruning: limits the number of slots committed to a single fork beyond 64 slots to prevent excessive lockout.
 
-```bash
-$ rustup update
-```
+### usage
+use these mods on testnet first before deploying them on mainnet to ensure stability. be cautious with extreme values for the configuration, as they may cause voting issues. it is recommended to keep the mostly confirmed threshold below 0.6 and the number of vote-ahead slots below 4.
 
-When building a specific release branch, you should check the rust version in `ci/rust-version.sh` and if necessary, install that version by running:
-```bash
-$ rustup install VERSION
-```
-Note that if this is not the latest rust version on your machine, cargo commands may require an [override](https://rust-lang.github.io/rustup/overrides.html) in order to use the correct version.
+### notes
+these mods are designed to enhance vote efficiency without altering core vote selection logic. validators still follow the stock solana fork-avoidance mechanisms, but additional safeguards are applied to increase vote credits and reduce the risk of voting on dead forks.
 
-On Linux systems you may need to install libssl-dev, pkg-config, zlib1g-dev, protobuf etc.
+### future improvements
 
-On Ubuntu:
-```bash
-$ sudo apt-get update
-$ sudo apt-get install libssl-dev libudev-dev pkg-config zlib1g-dev llvm clang cmake make libprotobuf-dev protobuf-compiler
-```
+potential areas for further improvement include:
+- refining safety mechanisms to avoid missing votes unnecessarily.
+- enhancing fork-avoidance heuristics to better predict when a fork is likely to die.
+- improving vote selection to prioritize faster or healthier forks.
 
-On Fedora:
-```bash
-$ sudo dnf install openssl-devel systemd-devel pkg-config zlib-devel llvm clang cmake make protobuf-devel protobuf-compiler perl-core
-```
+### conclusion
+this mod offers a balance between improving vote commitment and maintaining safety, with the ability to backfill missed votes and reduce unnecessary vote expirations. however, caution is advised when adjusting parameters, as aggressive configurations can disrupt voting.
 
-## **2. Download the source code.**
-
-```bash
-$ git clone https://github.com/solana-labs/solana.git
-$ cd solana
-```
-
-## **3. Build.**
-
-```bash
-$ ./cargo build
-```
-
-# Testing
-
-**Run the test suite:**
-
-```bash
-$ ./cargo test
-```
-
-### Starting a local testnet
-Start your own testnet locally, instructions are in the [online docs](https://docs.solana.com/cluster/bench-tps).
-
-### Accessing the remote development cluster
-* `devnet` - stable public cluster for development accessible via
-devnet.solana.com. Runs 24/7. Learn more about the [public clusters](https://docs.solana.com/clusters)
-
-# Benchmarking
-
-First, install the nightly build of rustc. `cargo bench` requires the use of the
-unstable features only available in the nightly build.
-
-```bash
-$ rustup install nightly
-```
-
-Run the benchmarks:
-
-```bash
-$ cargo +nightly bench
-```
-
-# Release Process
-
-The release process for this project is described [here](RELEASE.md).
-
-# Code coverage
-
-To generate code coverage statistics:
-
-```bash
-$ scripts/coverage.sh
-$ open target/cov/lcov-local/index.html
-```
-
-Why coverage? While most see coverage as a code quality metric, we see it primarily as a developer
-productivity metric. When a developer makes a change to the codebase, presumably it's a *solution* to
-some problem.  Our unit-test suite is how we encode the set of *problems* the codebase solves. Running
-the test suite should indicate that your change didn't *infringe* on anyone else's solutions. Adding a
-test *protects* your solution from future changes. Say you don't understand why a line of code exists,
-try deleting it and running the unit-tests. The nearest test failure should tell you what problem
-was solved by that code. If no test fails, go ahead and submit a Pull Request that asks, "what
-problem is solved by this code?" On the other hand, if a test does fail and you can think of a
-better way to solve the same problem, a Pull Request with your solution would most certainly be
-welcome! Likewise, if rewriting a test can better communicate what code it's protecting, please
-send us that patch!
-
-# Disclaimer
-
-All claims, content, designs, algorithms, estimates, roadmaps,
-specifications, and performance measurements described in this project
-are done with the Solana Labs, Inc. (“SL”) good faith efforts. It is up to
-the reader to check and validate their accuracy and truthfulness.
-Furthermore, nothing in this project constitutes a solicitation for
-investment.
-
-Any content produced by SL or developer resources that SL provides are
-for educational and inspirational purposes only. SL does not encourage,
-induce or sanction the deployment, integration or use of any such
-applications (including the code comprising the Solana blockchain
-protocol) in violation of applicable laws or regulations and hereby
-prohibits any such deployment, integration or use. This includes the use of
-any such applications by the reader (a) in violation of export control
-or sanctions laws of the United States or any other applicable
-jurisdiction, (b) if the reader is located in or ordinarily resident in
-a country or territory subject to comprehensive sanctions administered
-by the U.S. Office of Foreign Assets Control (OFAC), or (c) if the
-reader is or is working on behalf of a Specially Designated National
-(SDN) or a person subject to similar blocking or denied party
-prohibitions.
-
-The reader should be aware that U.S. export control and sanctions laws prohibit 
-U.S. persons (and other persons that are subject to such laws) from transacting 
-with persons in certain countries and territories or that are on the SDN list. 
-Accordingly, there is a risk to individuals that other persons using any of the 
-code contained in this repo, or a derivation thereof, may be sanctioned persons 
-and that transactions with such persons would be a violation of U.S. export 
-controls and sanctions law.
+# credits
+thanks to zantetsu from shinobi systems <3
